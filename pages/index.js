@@ -4,6 +4,30 @@ import { Upload, Send, Check, AlertCircle, HelpCircle } from 'lucide-react';
 // Products that use the concentration + volume dosing path
 const CONC_VOLUME_PRODUCTS = ['Testosterone Cypionate', 'Testosterone Cream', 'Estradiol Cream', 'Bi-Est Cream'];
 
+// Tooltip defined at top level (NOT inside Home) so it doesn't remount on every
+// keystroke and reset its open/closed state.
+function Tooltip({ text }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative inline-block">
+      <button
+        type="button"
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        onClick={() => setShow(!show)}
+        className="inline-block ml-1 text-blue-500 hover:text-blue-700 align-middle"
+      >
+        <HelpCircle size={16} />
+      </button>
+      {show && (
+        <div className="absolute bottom-full left-0 mb-2 w-60 bg-blue-50 border border-blue-200 rounded p-2 text-xs text-gray-700 z-10">
+          {text}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Home() {
   const [formData, setFormData] = useState({
     patientName: '',
@@ -67,28 +91,6 @@ export default function Home() {
   const isExisting = formData.requestType === 'existing-followup';
   const testUsesConcVolume = CONC_VOLUME_PRODUCTS.includes(formData.testosteroneForm);
   const estUsesConcVolume = CONC_VOLUME_PRODUCTS.includes(formData.estradiolForm);
-
-  const Tooltip = ({ text }) => {
-    const [show, setShow] = useState(false);
-    return (
-      <div className="relative inline-block">
-        <button
-          type="button"
-          onMouseEnter={() => setShow(true)}
-          onMouseLeave={() => setShow(false)}
-          onClick={() => setShow(!show)}
-          className="inline-block ml-1 text-blue-500 hover:text-blue-700 align-middle"
-        >
-          <HelpCircle size={16} />
-        </button>
-        {show && (
-          <div className="absolute bottom-full left-0 mb-2 w-60 bg-blue-50 border border-blue-200 rounded p-2 text-xs text-gray-700 z-10">
-            {text}
-          </div>
-        )}
-      </div>
-    );
-  };
 
   const set = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
 
@@ -221,8 +223,9 @@ Abnormal/Notable Results: ${formData.abnormalFindings || 'See attached labs'}
 NOTE: Lab results and supporting documents attached or sent to this email.`;
   };
 
-  // Reusable conc/volume dose entry block
-  const ConcVolumeEntry = ({ prefix, accentValue }) => {
+  // Reusable conc/volume dose entry block (plain function, NOT a component,
+  // so inputs don't remount and lose focus on each keystroke)
+  const renderConcVolumeEntry = (prefix) => {
     const mode = formData[`${prefix}EntryMode`];
     return (
       <div className="col-span-full">
@@ -422,7 +425,7 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
                 </div>
 
                 {testUsesConcVolume ? (
-                  <div className="mb-4"><ConcVolumeEntry prefix="testosterone" /></div>
+                  <div className="mb-4">{renderConcVolumeEntry('testosterone')}</div>
                 ) : formData.testosteroneForm ? (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                     <div>
@@ -513,7 +516,7 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
                 </div>
 
                 {estUsesConcVolume ? (
-                  <div className="mb-4"><ConcVolumeEntry prefix="estradiol" /></div>
+                  <div className="mb-4">{renderConcVolumeEntry('estradiol')}</div>
                 ) : formData.estradiolForm ? (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                     <div>
