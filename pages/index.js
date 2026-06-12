@@ -1,34 +1,52 @@
 import React, { useState } from 'react';
 import { Upload, Send, Check, AlertCircle, HelpCircle } from 'lucide-react';
 
+// Products that use the concentration + volume dosing path
+const CONC_VOLUME_PRODUCTS = ['Testosterone Cypionate', 'Testosterone Cream', 'Estradiol Cream', 'Bi-Est Cream'];
+
 export default function Home() {
   const [formData, setFormData] = useState({
     patientName: '',
     patientAge: '',
     requestType: 'existing-followup',
     clinicalReason: '',
+    // Testosterone
     testosteroneForm: '',
-    testosteroneDose: '',
+    testosteroneEntryMode: 'conc', // 'conc' or 'mg'
+    testosteroneConc: '',
+    testosteroneAmount: '',
+    testosteroneAmountUnit: 'units',
+    testosteroneMg: '',
     testosteroneFrequency: '',
     testosteroneLastDose: '',
+    // Progesterone
     progesteroneForm: '',
     progesteroneDose: '',
     progesteroneFrequency: '',
     progesteroneLastDose: '',
+    // Estradiol
     estradiolForm: '',
-    estradiolDose: '',
+    estradiolEntryMode: 'conc',
+    estradiolConc: '',
+    estradiolAmount: '',
+    estradiolAmountUnit: 'units',
+    estradiolMg: '',
     estradiolFrequency: '',
     estradiolLastDose: '',
+    // Thyroid
     thyroidForm: '',
     thyroidDose: '',
     thyroidFrequency: '',
     thyroidLastDose: '',
+    // Other
     otherMeds: '',
+    // Clinical Status
     overallStatus: 'stable',
     currentSymptoms: '',
     newSymptoms: '',
     sideEffects: '',
     patientGoals: '',
+    // Reproductive Status
     isMenopausal: '',
     menoNoMenses: false,
     menoFSH: false,
@@ -37,6 +55,7 @@ export default function Home() {
     menoAge: false,
     cycleRegularity: '',
     lastMenstrualPeriod: '',
+    // Labs
     labsAttached: false,
     abnormalFindings: '',
     files: []
@@ -46,6 +65,8 @@ export default function Home() {
   const [errors, setErrors] = useState({});
 
   const isExisting = formData.requestType === 'existing-followup';
+  const testUsesConcVolume = CONC_VOLUME_PRODUCTS.includes(formData.testosteroneForm);
+  const estUsesConcVolume = CONC_VOLUME_PRODUCTS.includes(formData.estradiolForm);
 
   const Tooltip = ({ text }) => {
     const [show, setShow] = useState(false);
@@ -61,13 +82,15 @@ export default function Home() {
           <HelpCircle size={16} />
         </button>
         {show && (
-          <div className="absolute bottom-full left-0 mb-2 w-56 bg-blue-50 border border-blue-200 rounded p-2 text-xs text-gray-700 z-10">
+          <div className="absolute bottom-full left-0 mb-2 w-60 bg-blue-50 border border-blue-200 rounded p-2 text-xs text-gray-700 z-10">
             {text}
           </div>
         )}
       </div>
     );
   };
+
+  const set = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
 
   const validateForm = () => {
     const newErrors = {};
@@ -87,12 +110,12 @@ export default function Home() {
     }
 
     if (isExisting) {
-      const hasTestosterone = formData.testosteroneForm && formData.testosteroneDose;
-      const hasProgesterone = formData.progesteroneForm && formData.progesteroneDose;
-      const hasEstradiol = formData.estradiolForm && formData.estradiolDose;
-      const hasThyroid = formData.thyroidForm && formData.thyroidDose;
-      if (!hasTestosterone && !hasProgesterone && !hasEstradiol && !hasThyroid && !formData.otherMeds.trim()) {
-        newErrors.regimen = 'Must document current regimen for an existing patient follow-up';
+      const hasTest = formData.testosteroneForm && (formData.testosteroneMg || formData.testosteroneAmount || formData.testosteroneConc);
+      const hasProg = formData.progesteroneForm && formData.progesteroneDose;
+      const hasEst = formData.estradiolForm && (formData.estradiolMg || formData.estradiolAmount || formData.estradiolConc);
+      const hasThy = formData.thyroidForm && formData.thyroidDose;
+      if (!hasTest && !hasProg && !hasEst && !hasThy && !formData.otherMeds.trim()) {
+        newErrors.regimen = 'Must document current regimen for a medication adjustment';
       }
     }
 
@@ -122,9 +145,22 @@ export default function Home() {
     }
   };
 
-  const hormoneLine = (label, form, dose, freq, lastDose) => {
-    if (!form && !dose) return `${label}: Not documented`;
-    let line = `${label}: ${dose} ${form}, ${freq}`;
+  // Build a dose description for a conc/volume hormone
+  const concVolumeDose = (form, mode, conc, amount, unit, mg) => {
+    if (CONC_VOLUME_PRODUCTS.includes(form)) {
+      if (mode === 'mg' && mg) return `${mg} mg`;
+      if (mode === 'conc' && (conc || amount)) {
+        return `${amount} ${unit} of ${conc}`;
+      }
+    }
+    return mg || amount || '';
+  };
+
+  const hormoneLine = (label, form, doseDesc, freq, lastDose) => {
+    if (!form) return `${label}: Not documented`;
+    let line = `${label}: ${form}`;
+    if (doseDesc) line += `, ${doseDesc}`;
+    if (freq) line += `, ${freq}`;
     if (isExisting && lastDose) line += ` | Last dose before labs: ${lastDose}`;
     return line;
   };
@@ -148,9 +184,12 @@ export default function Home() {
       reproSection = `Status: Uncertain`;
     }
 
+    const testDose = concVolumeDose(formData.testosteroneForm, formData.testosteroneEntryMode, formData.testosteroneConc, formData.testosteroneAmount, formData.testosteroneAmountUnit, formData.testosteroneMg);
+    const estDose = concVolumeDose(formData.estradiolForm, formData.estradiolEntryMode, formData.estradiolConc, formData.estradiolAmount, formData.estradiolAmountUnit, formData.estradiolMg);
+
     return `CONSULTATION REQUEST - PRECISION HORMONE CONSULTING
 
-REQUEST TYPE: ${formData.requestType === 'new-patient' ? 'NEW PATIENT - Full BHRT Analysis' : 'EXISTING BHRT PATIENT - Follow-up'}
+REQUEST TYPE: ${formData.requestType === 'new-patient' ? 'NEW PATIENT - Full BHRT Analysis' : 'EXISTING BHRT PATIENT - Medication Adjustment'}
 
 PATIENT INFORMATION:
 Name: ${formData.patientName}
@@ -158,9 +197,9 @@ Age: ${formData.patientAge}
 Clinical Reason: ${formData.clinicalReason || '(not specified)'}
 
 ${isExisting ? `CURRENT REGIMEN:
-${hormoneLine('Testosterone', formData.testosteroneForm, formData.testosteroneDose, formData.testosteroneFrequency, formData.testosteroneLastDose)}
+${hormoneLine('Testosterone', formData.testosteroneForm, testDose, formData.testosteroneFrequency, formData.testosteroneLastDose)}
 ${hormoneLine('Progesterone', formData.progesteroneForm, formData.progesteroneDose, formData.progesteroneFrequency, formData.progesteroneLastDose)}
-${hormoneLine('Estradiol', formData.estradiolForm, formData.estradiolDose, formData.estradiolFrequency, formData.estradiolLastDose)}
+${hormoneLine('Estradiol', formData.estradiolForm, estDose, formData.estradiolFrequency, formData.estradiolLastDose)}
 ${hormoneLine('Thyroid', formData.thyroidForm, formData.thyroidDose, formData.thyroidFrequency, formData.thyroidLastDose)}
 Other Medications/Supplements: ${formData.otherMeds || 'None documented'}
 ` : `NEW PATIENT - no current BHRT regimen (full analysis requested)
@@ -182,6 +221,74 @@ Abnormal/Notable Results: ${formData.abnormalFindings || 'See attached labs'}
 NOTE: Lab results and supporting documents attached or sent to this email.`;
   };
 
+  // Reusable conc/volume dose entry block
+  const ConcVolumeEntry = ({ prefix, accentValue }) => {
+    const mode = formData[`${prefix}EntryMode`];
+    return (
+      <div className="col-span-full">
+        <div className="flex items-center gap-4 mb-3">
+          <span className="text-xs font-semibold text-slate-700">Dose entry method:</span>
+          <label className="flex items-center text-sm">
+            <input type="radio" name={`${prefix}EntryMode`} value="conc"
+              checked={mode === 'conc'}
+              onChange={(e) => set(`${prefix}EntryMode`, e.target.value)}
+              className="w-4 h-4 text-blue-600 focus:ring-blue-500" />
+            <span className="ml-1.5 text-slate-700">Concentration + amount</span>
+          </label>
+          <label className="flex items-center text-sm">
+            <input type="radio" name={`${prefix}EntryMode`} value="mg"
+              checked={mode === 'mg'}
+              onChange={(e) => set(`${prefix}EntryMode`, e.target.value)}
+              className="w-4 h-4 text-blue-600 focus:ring-blue-500" />
+            <span className="ml-1.5 text-slate-700">Direct mg</span>
+          </label>
+        </div>
+
+        {mode === 'conc' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-2">Concentration</label>
+              <input type="text" value={formData[`${prefix}Conc`]}
+                onChange={(e) => set(`${prefix}Conc`, e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="e.g., '200 mg/mL', '100 mg/mL'" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-2">Amount per dose</label>
+              <input type="text" value={formData[`${prefix}Amount`]}
+                onChange={(e) => set(`${prefix}Amount`, e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="e.g., '20'" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-2 flex items-center">
+                Unit
+                <Tooltip text="Choose carefully: on an insulin syringe, 1 unit = 0.01 mL. So 20 units of 200 mg/mL = 0.2 mL = 40 mg. '20 mL' of cypionate would be a huge red flag - pick the unit that matches what the patient actually does." />
+              </label>
+              <select value={formData[`${prefix}AmountUnit`]}
+                onChange={(e) => set(`${prefix}AmountUnit`, e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="units">units (insulin syringe)</option>
+                <option value="mL">mL</option>
+                <option value="clicks">clicks (pump)</option>
+              </select>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-2">Dose (mg)</label>
+              <input type="text" value={formData[`${prefix}Mg`]}
+                onChange={(e) => set(`${prefix}Mg`, e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="e.g., '40 mg'" />
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (submitted) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-6">
@@ -198,10 +305,7 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
               Your email client is opening to send this request to Dr. Wilcox. If it doesn't open, please copy the information into an email to <strong>darrell2@4everyoungkingwoodtx.com</strong> and attach the labs.
             </p>
             <button
-              onClick={() => {
-                setSubmitted(false);
-                setErrors({});
-              }}
+              onClick={() => { setSubmitted(false); setErrors({}); }}
               className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
             >
               Submit Another Request
@@ -227,6 +331,7 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
 
         <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-lg overflow-hidden">
 
+          {/* Section 1: Patient Information */}
           <div className="border-b border-slate-200 p-6 sm:p-8">
             <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center">
               <span className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm mr-3">1</span>
@@ -237,38 +342,30 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
                   Patient Name <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={formData.patientName}
-                  onChange={(e) => setFormData(prev => ({ ...prev, patientName: e.target.value }))}
+                <input type="text" value={formData.patientName}
+                  onChange={(e) => set('patientName', e.target.value)}
                   className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.patientName ? 'border-red-500' : 'border-slate-300'}`}
-                  placeholder="Full name"
-                />
+                  placeholder="Full name" />
                 {errors.patientName && <p className="text-red-500 text-xs mt-1">{errors.patientName}</p>}
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
                   Patient Age <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={formData.patientAge}
-                  onChange={(e) => setFormData(prev => ({ ...prev, patientAge: e.target.value }))}
+                <input type="text" value={formData.patientAge}
+                  onChange={(e) => set('patientAge', e.target.value)}
                   className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.patientAge ? 'border-red-500' : 'border-slate-300'}`}
-                  placeholder="e.g., 54"
-                />
+                  placeholder="e.g., 54" />
                 {errors.patientAge && <p className="text-red-500 text-xs mt-1">{errors.patientAge}</p>}
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
                   Request Type <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={formData.requestType}
-                  onChange={(e) => setFormData(prev => ({ ...prev, requestType: e.target.value }))}
-                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.requestType ? 'border-red-500' : 'border-slate-300'}`}
-                >
-                  <option value="existing-followup">Existing BHRT Patient - Follow-up</option>
+                <select value={formData.requestType}
+                  onChange={(e) => set('requestType', e.target.value)}
+                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.requestType ? 'border-red-500' : 'border-slate-300'}`}>
+                  <option value="existing-followup">Existing BHRT Patient - Medication Adjustment</option>
                   <option value="new-patient">New Patient - Full BHRT Analysis</option>
                 </select>
                 {errors.requestType && <p className="text-red-500 text-xs mt-1">{errors.requestType}</p>}
@@ -277,182 +374,219 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
                   Clinical Reason for Request
                 </label>
-                <input
-                  type="text"
-                  value={formData.clinicalReason}
-                  onChange={(e) => setFormData(prev => ({ ...prev, clinicalReason: e.target.value }))}
+                <input type="text" value={formData.clinicalReason}
+                  onChange={(e) => set('clinicalReason', e.target.value)}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., 'Follow-up labs in, reviewing for adjustment'"
-                />
+                  placeholder="e.g., 'Follow-up labs in, reviewing for adjustment'" />
               </div>
             </div>
           </div>
 
+          {/* Section 2: Current Regimen (existing only) */}
           {isExisting && (
             <div className="border-b border-slate-200 p-6 sm:p-8">
               <h2 className="text-xl font-bold text-slate-800 mb-2 flex items-center">
                 <span className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm mr-3">2</span>
                 Current Regimen
-                <Tooltip text="Be specific: include formulation, exact dose, frequency, route. For existing patients, the last dose date/time before labs tells us whether we're seeing peak, trough, or mid-range levels." />
+                <Tooltip text="Document exactly what the patient takes. For injectables and creams, concentration plus the amount/unit injected is essential. Last-dose timing before labs tells us peak vs trough vs mid-range." />
               </h2>
               <p className="text-sm text-gray-600 mb-6">
                 Document exactly what the patient is currently taking, and when each was last dosed prior to the blood draw.
               </p>
 
+              {/* Testosterone */}
               <div className="bg-amber-50 rounded-lg p-4 mb-6">
-                <h3 className="font-semibold text-slate-800 mb-4 flex items-center">
-                  Testosterone
-                  <Tooltip text="CRITICAL: Include exact concentration (e.g., 50mg/mL, 100mg/mL, 200mg/mL). '20 units' means nothing without the concentration. Note route (SQ/IM/topical)." />
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <h3 className="font-semibold text-slate-800 mb-4">Testosterone</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-2">Formulation & Concentration</label>
-                    <input type="text" value={formData.testosteroneForm}
-                      onChange={(e) => setFormData(prev => ({ ...prev, testosteroneForm: e.target.value }))}
-                      className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., 'Test Cyp 100mg/mL', 'cream 2%', 'pellet'" />
+                    <label className="block text-xs font-semibold text-slate-700 mb-2">Formulation</label>
+                    <select value={formData.testosteroneForm}
+                      onChange={(e) => set('testosteroneForm', e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="">Select...</option>
+                      <option value="Testosterone Cypionate">Testosterone Cypionate</option>
+                      <option value="Testosterone Cream">Testosterone Cream</option>
+                      <option value="Oral Testosterone Capsules">Oral Testosterone Capsules</option>
+                      <option value="Testosterone Troches">Testosterone Troches</option>
+                      <option value="Testosterone Pellet">Testosterone Pellet</option>
+                      <option value="Other">Other</option>
+                    </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-2">Dose</label>
-                    <input type="text" value={formData.testosteroneDose}
-                      onChange={(e) => setFormData(prev => ({ ...prev, testosteroneDose: e.target.value }))}
-                      className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., '20 units', '50mg', '600mg pellets'" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-2">Route & Frequency</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-2">Frequency</label>
                     <input type="text" value={formData.testosteroneFrequency}
-                      onChange={(e) => setFormData(prev => ({ ...prev, testosteroneFrequency: e.target.value }))}
+                      onChange={(e) => set('testosteroneFrequency', e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., 'SQ weekly', 'IM q2wk', 'topical daily'" />
+                      placeholder="e.g., 'SQ weekly', 'twice weekly', 'q3 months'" />
                   </div>
+                </div>
+
+                {testUsesConcVolume ? (
+                  <div className="mb-4"><ConcVolumeEntry prefix="testosterone" /></div>
+                ) : formData.testosteroneForm ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-2">Dose (mg)</label>
+                      <input type="text" value={formData.testosteroneMg}
+                        onChange={(e) => set('testosteroneMg', e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., '100 mg', '600 mg pellets'" />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-2">Last dose before labs (date/time)</label>
                     <input type="text" value={formData.testosteroneLastDose}
-                      onChange={(e) => setFormData(prev => ({ ...prev, testosteroneLastDose: e.target.value }))}
+                      onChange={(e) => set('testosteroneLastDose', e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="e.g., '3 days prior', '6/5 8am'" />
                   </div>
                 </div>
               </div>
 
+              {/* Progesterone */}
               <div className="bg-purple-50 rounded-lg p-4 mb-6">
                 <h3 className="font-semibold text-slate-800 mb-4">Progesterone</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-2">Type</label>
                     <select value={formData.progesteroneForm}
-                      onChange={(e) => setFormData(prev => ({ ...prev, progesteroneForm: e.target.value }))}
+                      onChange={(e) => set('progesteroneForm', e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                       <option value="">Select...</option>
-                      <option value="micronized oral">Micronized oral (capsule)</option>
-                      <option value="synthetic progestin">Synthetic progestin</option>
-                      <option value="cream">Cream</option>
-                      <option value="compounded">Compounded form</option>
-                      <option value="other">Other</option>
+                      <option value="Oral - compounded">Oral - compounded</option>
+                      <option value="Oral - retail">Oral - retail</option>
+                      <option value="Other">Other</option>
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-2">Dose</label>
                     <input type="text" value={formData.progesteroneDose}
-                      onChange={(e) => setFormData(prev => ({ ...prev, progesteroneDose: e.target.value }))}
+                      onChange={(e) => set('progesteroneDose', e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="e.g., '100 mg', '200 mg'" />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-2">Frequency</label>
                     <input type="text" value={formData.progesteroneFrequency}
-                      onChange={(e) => setFormData(prev => ({ ...prev, progesteroneFrequency: e.target.value }))}
+                      onChange={(e) => set('progesteroneFrequency', e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="e.g., 'qHS', 'days 15-28'" />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-2">Last dose before labs (date/time)</label>
                     <input type="text" value={formData.progesteroneLastDose}
-                      onChange={(e) => setFormData(prev => ({ ...prev, progesteroneLastDose: e.target.value }))}
+                      onChange={(e) => set('progesteroneLastDose', e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="e.g., 'last night', '6/5 10pm'" />
                   </div>
                 </div>
               </div>
 
+              {/* Estradiol */}
               <div className="bg-blue-50 rounded-lg p-4 mb-6">
                 <h3 className="font-semibold text-slate-800 mb-4">Estradiol</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-2">Formulation (Route)</label>
-                    <input type="text" value={formData.estradiolForm}
-                      onChange={(e) => setFormData(prev => ({ ...prev, estradiolForm: e.target.value }))}
-                      className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., 'oral', 'patch', 'pellet', 'cream'" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-2">Dose</label>
-                    <input type="text" value={formData.estradiolDose}
-                      onChange={(e) => setFormData(prev => ({ ...prev, estradiolDose: e.target.value }))}
-                      className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., '2 mg', '0.1 mg/day', '4mg pellet'" />
+                    <label className="block text-xs font-semibold text-slate-700 mb-2">Formulation</label>
+                    <select value={formData.estradiolForm}
+                      onChange={(e) => set('estradiolForm', e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="">Select...</option>
+                      <option value="Oral Estradiol Capsules">Oral Estradiol Capsules</option>
+                      <option value="Estradiol Cream">Estradiol Cream</option>
+                      <option value="Estradiol Patch">Estradiol Patch</option>
+                      <option value="Estradiol Pellet">Estradiol Pellet</option>
+                      <option value="Bi-Est Capsules">Bi-Est Capsules</option>
+                      <option value="Bi-Est Cream">Bi-Est Cream</option>
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-2">Frequency</label>
                     <input type="text" value={formData.estradiolFrequency}
-                      onChange={(e) => setFormData(prev => ({ ...prev, estradiolFrequency: e.target.value }))}
+                      onChange={(e) => set('estradiolFrequency', e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="e.g., 'daily', 'BID', 'q3 months'" />
                   </div>
+                </div>
+
+                {estUsesConcVolume ? (
+                  <div className="mb-4"><ConcVolumeEntry prefix="estradiol" /></div>
+                ) : formData.estradiolForm ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-2">Dose</label>
+                      <input type="text" value={formData.estradiolMg}
+                        onChange={(e) => set('estradiolMg', e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., '1 mg', '0.05 mg/day patch', '4 mg pellet'" />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-2">Last dose before labs (date/time)</label>
                     <input type="text" value={formData.estradiolLastDose}
-                      onChange={(e) => setFormData(prev => ({ ...prev, estradiolLastDose: e.target.value }))}
+                      onChange={(e) => set('estradiolLastDose', e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="e.g., 'morning of', '6/5 7am'" />
                   </div>
                 </div>
               </div>
 
+              {/* Thyroid */}
               <div className="bg-teal-50 rounded-lg p-4 mb-6">
                 <h3 className="font-semibold text-slate-800 mb-4 flex items-center">
                   Thyroid
-                  <Tooltip text="Include agent (NP Thyroid, levothyroxine, liothyronine, compounded T3/T4), dose, and timing. Last-dose timing matters especially for T3-containing products." />
+                  <Tooltip text="Last-dose timing matters especially for T3-containing desiccated products. Note if held the morning of the draw." />
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-2">Agent / Formulation</label>
-                    <input type="text" value={formData.thyroidForm}
-                      onChange={(e) => setFormData(prev => ({ ...prev, thyroidForm: e.target.value }))}
-                      className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., 'NP Thyroid', 'levothyroxine', 'compounded T3/T4'" />
+                    <label className="block text-xs font-semibold text-slate-700 mb-2">Agent</label>
+                    <select value={formData.thyroidForm}
+                      onChange={(e) => set('thyroidForm', e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="">Select...</option>
+                      <option value="Desiccated Thyroid">Desiccated Thyroid</option>
+                      <option value="NP Thyroid">NP Thyroid</option>
+                      <option value="Armour Thyroid">Armour Thyroid</option>
+                      <option value="Other">Other</option>
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-2">Dose</label>
                     <input type="text" value={formData.thyroidDose}
-                      onChange={(e) => setFormData(prev => ({ ...prev, thyroidDose: e.target.value }))}
+                      onChange={(e) => set('thyroidDose', e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., '60 mg', '88 mcg'" />
+                      placeholder="e.g., '60 mg', '1 grain', '88 mcg'" />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-2">Frequency</label>
                     <input type="text" value={formData.thyroidFrequency}
-                      onChange={(e) => setFormData(prev => ({ ...prev, thyroidFrequency: e.target.value }))}
+                      onChange={(e) => set('thyroidFrequency', e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="e.g., 'daily AM', 'BID'" />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-2">Last dose before labs (date/time)</label>
                     <input type="text" value={formData.thyroidLastDose}
-                      onChange={(e) => setFormData(prev => ({ ...prev, thyroidLastDose: e.target.value }))}
+                      onChange={(e) => set('thyroidLastDose', e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="e.g., 'held AM of draw', '6/5 6am'" />
                   </div>
                 </div>
               </div>
 
+              {/* Other Medications */}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
                   Other Medications / Supplements
                 </label>
                 <textarea value={formData.otherMeds}
-                  onChange={(e) => setFormData(prev => ({ ...prev, otherMeds: e.target.value }))}
+                  onChange={(e) => set('otherMeds', e.target.value)}
                   className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   rows="3"
                   placeholder="DHEA, pregnenolone, DIM, oxytocin, peptides, anastrozole, hCG, etc." />
@@ -467,6 +601,7 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
             </div>
           )}
 
+          {/* New patient meds section */}
           {!isExisting && (
             <div className="border-b border-slate-200 p-6 sm:p-8">
               <h2 className="text-xl font-bold text-slate-800 mb-2 flex items-center">
@@ -477,13 +612,14 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
                 This is a new patient for full BHRT analysis. List any current medications, hormones, or supplements they're already taking (or note "none").
               </p>
               <textarea value={formData.otherMeds}
-                onChange={(e) => setFormData(prev => ({ ...prev, otherMeds: e.target.value }))}
+                onChange={(e) => set('otherMeds', e.target.value)}
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 rows="4"
                 placeholder="Any current prescriptions, OTC hormones, thyroid medication, supplements, etc. - or 'none'" />
             </div>
           )}
 
+          {/* Section 3: Clinical Status */}
           <div className="border-b border-slate-200 p-6 sm:p-8">
             <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center">
               <span className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm mr-3">3</span>
@@ -500,7 +636,7 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
                   <label key={status} className="flex items-center">
                     <input type="radio" name="overallStatus" value={status}
                       checked={formData.overallStatus === status}
-                      onChange={(e) => setFormData(prev => ({ ...prev, overallStatus: e.target.value }))}
+                      onChange={(e) => set('overallStatus', e.target.value)}
                       className="w-4 h-4 text-blue-600 focus:ring-blue-500" />
                     <span className="ml-2 text-slate-700 capitalize">{status}</span>
                   </label>
@@ -514,7 +650,7 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
                 Current Symptoms (or "asymptomatic") <span className="text-red-500">*</span>
               </label>
               <textarea value={formData.currentSymptoms}
-                onChange={(e) => setFormData(prev => ({ ...prev, currentSymptoms: e.target.value }))}
+                onChange={(e) => set('currentSymptoms', e.target.value)}
                 className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm ${errors.currentSymptoms ? 'border-red-500' : 'border-slate-300'}`}
                 rows="3"
                 placeholder="e.g., 'asymptomatic' or 'hot flashes 5-10/day, low libido, fatigue, sleep improved'" />
@@ -525,7 +661,7 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
             <div className="mb-6">
               <label className="block text-sm font-semibold text-slate-700 mb-2">New Symptoms Since Last Visit</label>
               <textarea value={formData.newSymptoms}
-                onChange={(e) => setFormData(prev => ({ ...prev, newSymptoms: e.target.value }))}
+                onChange={(e) => set('newSymptoms', e.target.value)}
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 rows="2"
                 placeholder="Any new issues that have emerged - or 'none'" />
@@ -534,7 +670,7 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
             <div className="mb-6">
               <label className="block text-sm font-semibold text-slate-700 mb-2">Side Effects or Tolerability Issues</label>
               <textarea value={formData.sideEffects}
-                onChange={(e) => setFormData(prev => ({ ...prev, sideEffects: e.target.value }))}
+                onChange={(e) => set('sideEffects', e.target.value)}
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 rows="2"
                 placeholder="Any negative effects from current regimen - or 'none reported'" />
@@ -543,13 +679,14 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Patient's Goals or Concerns</label>
               <textarea value={formData.patientGoals}
-                onChange={(e) => setFormData(prev => ({ ...prev, patientGoals: e.target.value }))}
+                onChange={(e) => set('patientGoals', e.target.value)}
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 rows="2"
                 placeholder="What does the patient hope to achieve or what are they concerned about?" />
             </div>
           </div>
 
+          {/* Section 4: Reproductive / Hormonal Status */}
           <div className="border-b border-slate-200 p-6 sm:p-8">
             <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center">
               <span className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm mr-3">4</span>
@@ -570,7 +707,7 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
                   <label key={option.value} className="flex items-center">
                     <input type="radio" name="isMenopausal" value={option.value}
                       checked={formData.isMenopausal === option.value}
-                      onChange={(e) => setFormData(prev => ({ ...prev, isMenopausal: e.target.value }))}
+                      onChange={(e) => set('isMenopausal', e.target.value)}
                       className="w-4 h-4 text-blue-600 focus:ring-blue-500" />
                     <span className="ml-2 text-slate-700">{option.label}</span>
                   </label>
@@ -594,7 +731,7 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
                   ].map(item => (
                     <label key={item.key} className="flex items-center">
                       <input type="checkbox" checked={formData[item.key]}
-                        onChange={(e) => setFormData(prev => ({ ...prev, [item.key]: e.target.checked }))}
+                        onChange={(e) => set(item.key, e.target.checked)}
                         className="w-4 h-4 text-blue-600 focus:ring-blue-500 rounded" />
                       <span className="ml-2 text-slate-700">{item.label}</span>
                     </label>
@@ -617,7 +754,7 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
                       <label key={option.value} className="flex items-center">
                         <input type="radio" name="cycleRegularity" value={option.value}
                           checked={formData.cycleRegularity === option.value}
-                          onChange={(e) => setFormData(prev => ({ ...prev, cycleRegularity: e.target.value }))}
+                          onChange={(e) => set('cycleRegularity', e.target.value)}
                           className="w-4 h-4 text-blue-600 focus:ring-blue-500" />
                         <span className="ml-2 text-slate-700">{option.label}</span>
                       </label>
@@ -631,7 +768,7 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
                     <Tooltip text="The cycle day at the time of the blood draw determines which phase (follicular/luteal) the hormone levels represent." />
                   </label>
                   <input type="text" value={formData.lastMenstrualPeriod}
-                    onChange={(e) => setFormData(prev => ({ ...prev, lastMenstrualPeriod: e.target.value }))}
+                    onChange={(e) => set('lastMenstrualPeriod', e.target.value)}
                     className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.lastMenstrualPeriod ? 'border-red-500' : 'border-slate-300'}`}
                     placeholder="e.g., '2026-05-28' or 'May 28'" />
                   {errors.lastMenstrualPeriod && <p className="text-red-500 text-xs mt-1">{errors.lastMenstrualPeriod}</p>}
@@ -640,6 +777,7 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
             )}
           </div>
 
+          {/* Section 5: Labs */}
           <div className="border-b border-slate-200 p-6 sm:p-8">
             <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center">
               <span className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm mr-3">5</span>
@@ -654,7 +792,7 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
                   <p className="text-sm text-gray-600">Confirm labs are uploaded below or attached to the email (required)</p>
                 </div>
                 <input type="checkbox" checked={formData.labsAttached}
-                  onChange={(e) => setFormData(prev => ({ ...prev, labsAttached: e.target.checked }))}
+                  onChange={(e) => set('labsAttached', e.target.checked)}
                   className="ml-auto w-6 h-6 text-blue-600" />
               </label>
               {errors.labsAttached && (
@@ -668,7 +806,7 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Abnormal or Notable Lab Findings</label>
               <textarea value={formData.abnormalFindings}
-                onChange={(e) => setFormData(prev => ({ ...prev, abnormalFindings: e.target.value }))}
+                onChange={(e) => set('abnormalFindings', e.target.value)}
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 rows="3"
                 placeholder="e.g., 'Free T 25 (optimal 18-23), E2 45, TSH 3.1, ferritin 30' OR 'all within optimal ranges'" />
@@ -676,6 +814,7 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
             </div>
           </div>
 
+          {/* Section 6: Uploads */}
           <div className="border-b border-slate-200 p-6 sm:p-8">
             <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center">
               <span className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm mr-3">6</span>
@@ -715,6 +854,7 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
             </div>
           </div>
 
+          {/* Submit */}
           <div className="bg-slate-50 p-6 sm:p-8 border-t border-slate-200">
             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900">
               <p className="font-semibold mb-2">Ready to submit?</p>
