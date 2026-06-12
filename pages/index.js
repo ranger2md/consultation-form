@@ -87,6 +87,7 @@ export default function Home() {
 
   const [submitted, setSubmitted] = useState(false);
   const [errors, setErrors] = useState({});
+  const [copied, setCopied] = useState(false);
 
   const isExisting = formData.requestType === 'existing-followup';
   const testUsesConcVolume = CONC_VOLUME_PRODUCTS.includes(formData.testosteroneForm);
@@ -121,7 +122,7 @@ export default function Home() {
       }
     }
 
-    if (!formData.labsAttached) newErrors.labsAttached = 'Lab results must be attached';
+    if (formData.files.length === 0) newErrors.labsAttached = 'Lab results must be added';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -136,15 +137,76 @@ export default function Home() {
     setFormData(prev => ({ ...prev, files: prev.files.filter((_, i) => i !== index) }));
   };
 
+  const TO_EMAIL = 'darrell2@4everyoungkingwoodtx.com';
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (validateForm()) {
+    const valid = validateForm();
+    if (valid) {
       setSubmitted(true);
-      const emailBody = generateEmailBody();
+      setCopied(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      // Scroll to the first field with an error so the user sees what's missing
       setTimeout(() => {
-        window.location.href = `mailto:darrell2@4everyoungkingwoodtx.com?subject=Consultation%20Request:%20${encodeURIComponent(formData.patientName)}&body=${encodeURIComponent(emailBody)}`;
-      }, 1000);
+        const firstError = document.querySelector('[data-error="true"]');
+        if (firstError) {
+          firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 50);
     }
+  };
+
+  const subjectText = () => `Consultation Request: ${formData.patientName}`;
+
+  const gmailUrl = () => {
+    const body = encodeURIComponent(generateEmailBody());
+    const su = encodeURIComponent(subjectText());
+    return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(TO_EMAIL)}&su=${su}&body=${body}`;
+  };
+
+  const outlookUrl = () => {
+    const body = encodeURIComponent(generateEmailBody());
+    const su = encodeURIComponent(subjectText());
+    return `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(TO_EMAIL)}&subject=${su}&body=${body}`;
+  };
+
+  const mailtoUrl = () => {
+    const body = encodeURIComponent(generateEmailBody());
+    const su = encodeURIComponent(subjectText());
+    return `mailto:${TO_EMAIL}?subject=${su}&body=${body}`;
+  };
+
+  const copyRequestText = async () => {
+    try {
+      await navigator.clipboard.writeText(generateEmailBody());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    } catch (err) {
+      // Fallback for older browsers
+      const ta = document.createElement('textarea');
+      ta.value = generateEmailBody();
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    }
+  };
+
+  // Human-readable labels for the error summary
+  const errorLabels = {
+    patientName: 'Patient name',
+    patientAge: 'Patient age',
+    requestType: 'Request type',
+    currentSymptoms: 'Current symptoms',
+    overallStatus: 'Overall status',
+    isMenopausal: 'Menopausal status',
+    cycleRegularity: 'Cycle regularity',
+    lastMenstrualPeriod: 'Last menstrual period',
+    regimen: 'Current regimen',
+    labsAttached: 'Lab results upload'
   };
 
   // Build a dose description for a conc/volume hormone
@@ -220,7 +282,9 @@ ${reproSection}
 LAB FINDINGS:
 Abnormal/Notable Results: ${formData.abnormalFindings || 'See attached labs'}
 
-NOTE: Lab results and supporting documents attached or sent to this email.`;
+EXPECTED ATTACHMENTS (staff to attach to this email): ${formData.files.length ? formData.files.map(f => f.name).join(', ') : 'None added'}
+
+NOTE: Lab results and supporting documents should be attached to this email before sending.`;
   };
 
   // Reusable conc/volume dose entry block (plain function, NOT a component,
@@ -294,24 +358,70 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 sm:p-6">
         <div className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+          <div className="bg-white rounded-lg shadow-lg p-6 sm:p-8">
             <div className="flex justify-center mb-4">
-              <Check size={64} className="text-green-500" />
+              <Check size={56} className="text-green-500" />
             </div>
-            <h2 className="text-2xl font-bold text-slate-800 mb-2">Request Submitted</h2>
-            <p className="text-gray-600 mb-4">
-              Your consultation request for <strong>{formData.patientName}</strong> has been prepared.
+            <h2 className="text-2xl font-bold text-slate-800 mb-2 text-center">Almost done — 2 steps left</h2>
+            <p className="text-gray-600 mb-6 text-center">
+              Your request for <strong>{formData.patientName}</strong> is ready. Follow these two steps to send it to Dr. Wilcox.
             </p>
-            <p className="text-sm text-gray-600 mb-6">
-              Your email client is opening to send this request to Dr. Wilcox. If it doesn't open, please copy the information into an email to <strong>darrell2@4everyoungkingwoodtx.com</strong> and attach the labs.
-            </p>
+
+            {/* Step 1 */}
+            <div className="mb-5 p-4 border border-slate-200 rounded-lg">
+              <p className="font-semibold text-slate-800 mb-3">
+                <span className="inline-flex w-6 h-6 rounded-full bg-blue-600 text-white items-center justify-center text-xs mr-2">1</span>
+                Open a pre-filled email
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <a href={outlookUrl()} target="_blank" rel="noopener noreferrer"
+                  className="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-lg transition">
+                  Open in Outlook
+                </a>
+                <a href={gmailUrl()} target="_blank" rel="noopener noreferrer"
+                  className="flex-1 text-center bg-slate-700 hover:bg-slate-800 text-white font-semibold py-2.5 px-4 rounded-lg transition">
+                  Open in Gmail
+                </a>
+              </div>
+              <button onClick={copyRequestText}
+                className="w-full mt-3 text-center border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold py-2.5 px-4 rounded-lg transition">
+                {copied ? 'Copied! Paste into a new email' : 'Or copy request text to paste manually'}
+              </button>
+              <p className="text-xs text-gray-500 mt-2">
+                The email opens addressed to <strong>{TO_EMAIL}</strong> with everything filled in.
+              </p>
+            </div>
+
+            {/* Step 2 */}
+            <div className="mb-6 p-4 border border-amber-200 bg-amber-50 rounded-lg">
+              <p className="font-semibold text-amber-900 mb-2">
+                <span className="inline-flex w-6 h-6 rounded-full bg-amber-500 text-white items-center justify-center text-xs mr-2">2</span>
+                Attach the lab file(s) to that email before sending
+              </p>
+              {formData.files.length > 0 ? (
+                <div className="text-sm text-amber-900">
+                  <p className="mb-1">Attach these file(s):</p>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    {formData.files.map((file, i) => (
+                      <li key={i} className="font-medium">{file.name}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="text-sm text-amber-900">Attach the patient's lab results PDF.</p>
+              )}
+              <p className="text-xs text-amber-800 mt-2">
+                Note: the files you selected on the form can't be carried into the email automatically — please drag them in from your computer.
+              </p>
+            </div>
+
             <button
-              onClick={() => { setSubmitted(false); setErrors({}); }}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+              onClick={() => { setSubmitted(false); setErrors({}); window.scrollTo({ top: 0 }); }}
+              className="w-full border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold py-2.5 px-4 rounded-lg transition"
             >
-              Submit Another Request
+              Start Another Request
             </button>
           </div>
         </div>
@@ -780,33 +890,14 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
             )}
           </div>
 
-          {/* Section 5: Labs */}
+          {/* Section 5: Lab Results (findings + upload, merged) */}
           <div className="border-b border-slate-200 p-6 sm:p-8">
             <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center">
               <span className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm mr-3">5</span>
-              Lab Results & Findings
+              Lab Results
             </h2>
 
             <div className="mb-6">
-              <label className="flex items-center p-4 border-2 border-dashed border-slate-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 cursor-pointer transition">
-                <Upload size={24} className="text-slate-600 mr-3" />
-                <div>
-                  <p className="font-semibold text-slate-800">Lab Results Attached</p>
-                  <p className="text-sm text-gray-600">Confirm labs are uploaded below or attached to the email (required)</p>
-                </div>
-                <input type="checkbox" checked={formData.labsAttached}
-                  onChange={(e) => set('labsAttached', e.target.checked)}
-                  className="ml-auto w-6 h-6 text-blue-600" />
-              </label>
-              {errors.labsAttached && (
-                <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm flex items-start">
-                  <AlertCircle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
-                  Lab results are required
-                </div>
-              )}
-            </div>
-
-            <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Abnormal or Notable Lab Findings</label>
               <textarea value={formData.abnormalFindings}
                 onChange={(e) => set('abnormalFindings', e.target.value)}
@@ -815,31 +906,23 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
                 placeholder="e.g., 'Free T 25 (optimal 18-23), E2 45, TSH 3.1, ferritin 30' OR 'all within optimal ranges'" />
               <p className="text-xs text-gray-600 mt-2">Highlight what stands out - don't just say 'see attached'. This helps focus the review.</p>
             </div>
-          </div>
 
-          {/* Section 6: Uploads */}
-          <div className="border-b border-slate-200 p-6 sm:p-8">
-            <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center">
-              <span className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm mr-3">6</span>
-              Supporting Documents
-            </h2>
-
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-slate-700 mb-3">
-                Upload Lab Results, Chart Notes, or Other Supporting Documents
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Lab Results &amp; Supporting Documents <span className="text-red-500">*</span>
               </label>
               <label className="block w-full p-6 border-2 border-dashed border-blue-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 cursor-pointer transition">
                 <div className="flex flex-col items-center">
                   <Upload size={32} className="text-blue-500 mb-2" />
                   <p className="font-semibold text-slate-800">Click to upload or drag files here</p>
-                  <p className="text-xs text-gray-600">PDF, JPG, PNG</p>
+                  <p className="text-xs text-gray-600">Lab PDF, chart notes, images &middot; PDF, JPG, PNG</p>
                 </div>
                 <input type="file" multiple onChange={handleFileUpload} className="hidden" />
               </label>
 
               {formData.files.length > 0 && (
                 <div className="mt-4">
-                  <p className="text-sm font-semibold text-slate-700 mb-2">Attached Files:</p>
+                  <p className="text-sm font-semibold text-slate-700 mb-2">Files added:</p>
                   <div className="space-y-2">
                     {formData.files.map((file, index) => (
                       <div key={index} className="flex items-center justify-between bg-slate-50 p-3 rounded">
@@ -851,9 +934,18 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
                   </div>
                 </div>
               )}
-              <p className="text-xs text-gray-600 mt-3">
-                Note: If your email client doesn't carry these attachments over automatically, please attach the lab PDF directly to the email that opens.
-              </p>
+
+              {errors.labsAttached && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm flex items-start">
+                  <AlertCircle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
+                  Please add the lab results before submitting.
+                </div>
+              )}
+
+              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded text-amber-900 text-sm flex items-start">
+                <AlertCircle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
+                <span><strong>Important:</strong> When the email opens, please also drag-and-drop the lab PDF directly into it before sending. Files added here are listed in the email so Dr. Wilcox knows what to expect, but your email program won't attach them automatically.</span>
+              </div>
             </div>
           </div>
 
@@ -861,13 +953,27 @@ NOTE: Lab results and supporting documents attached or sent to this email.`;
           <div className="bg-slate-50 p-6 sm:p-8 border-t border-slate-200">
             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900">
               <p className="font-semibold mb-2">Ready to submit?</p>
-              <p>This will be sent to Dr. Wilcox at <strong>darrell2@4everyoungkingwoodtx.com</strong> with all information included. He typically responds within 24 business hours.</p>
+              <p>The next screen will open a pre-filled email to Dr. Wilcox at <strong>darrell2@4everyoungkingwoodtx.com</strong> and remind you to attach the lab file. He typically responds within 24 business hours.</p>
             </div>
+
+            {Object.keys(errors).length > 0 && (
+              <div data-error="true" className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                <p className="font-semibold mb-2 flex items-center">
+                  <AlertCircle size={16} className="mr-2" />
+                  Please complete the following before submitting:
+                </p>
+                <ul className="list-disc list-inside space-y-1">
+                  {Object.keys(errors).map(key => (
+                    <li key={key}>{errorLabels[key] || key}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <button type="submit"
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition flex items-center justify-center">
               <Send size={20} className="mr-2" />
-              Submit Consultation Request
+              Prepare Email to Dr. Wilcox
             </button>
 
             <p className="text-xs text-gray-600 mt-4 text-center">
